@@ -77,7 +77,7 @@ FitRealm turns your workouts into an epic MMORPG adventure. Build a character, j
 
 ---
 
-# Welcome to your Expo app 👋
+# Welcome to the FitRealm Expo app 👋
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
