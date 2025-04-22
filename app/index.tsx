@@ -1,4 +1,5 @@
 import { Text, View } from "react-native";
+import CharacterScreen from '../screens/CharacterScreen';
 
 export default function Index() {
   return (
@@ -13,3 +14,5 @@ export default function Index() {
     </View>
   );
 }
+
+// export default CharacterScreen;
