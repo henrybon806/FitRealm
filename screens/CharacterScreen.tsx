@@ -4,9 +4,9 @@ import { useState, useEffect } from 'react';
 import { View, Text, Button, TextInput } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
 import { Character } from '../types/characterTypes';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@env';
+import { SUPABASE_URL as url, SUPABASE_ANON_KEY as key } from '@env';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+export const supabase = createClient(url, key);
 
 export default function CharacterScreen() {
   const [name, setName] = useState('');
