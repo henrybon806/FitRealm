@@ -1,86 +1,122 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-} from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { createClient } from '@supabase/supabase-js';
-import { SUPABASE_URL as url, SUPABASE_ANON_KEY as key } from '@env';
-import { RootStackParamList } from '../app/AppNavigator'; // Import from your navigator file
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { useAuth } from '../app/AuthProvider'; // adjust path as needed
+import { supabase } from '../app/supabase'
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../types/navigation';
 
-type LoginScreenNavigationProp = NativeStackNavigationProp<
-  RootStackParamList,
-  'Login'
->;
+type LoginScreenProps = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
-const supabase = createClient(url, key);
-
-export default function LoginScreen() {
-  const navigation = useNavigation<LoginScreenNavigationProp>();
+export default function LoginScreen({ navigation }: LoginScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSigningUp, setIsSigningUp] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleAuth = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please enter email and password');
+      return;
+    }
+
+    setLoading(true);
+
     try {
+      let authResponse;
+
       if (isSigningUp) {
-        const { data, error } = await supabase.auth.signUp({
+        authResponse = await supabase.auth.signUp({
           email,
           password,
         });
-        if (error) throw error;
+
+        if (authResponse.error) throw authResponse.error;
+
+        if (authResponse.data?.user?.identities?.length === 0) {
+          Alert.alert('Error', 'This email is already registered. Please sign in instead.');
+          setIsSigningUp(false);
+          setLoading(false);
+          return;
+        }
+
+        if (!authResponse.data.session) {
+          Alert.alert('Verification Required', 'Please check your email to verify your account before logging in.');
+          setIsSigningUp(false);
+          setLoading(false);
+          return;
+        }
       } else {
-        const { data, error } = await supabase.auth.signInWithPassword({
+        authResponse = await supabase.auth.signInWithPassword({
           email,
           password,
         });
-        if (error) throw error;
+
+        if (authResponse.error) throw authResponse.error;
       }
-      
-      navigation.navigate('Character');
+
+      console.log('Auth successful:', authResponse.data.user);
+
+      if (authResponse.data.session) {
+        // Navigate directly to Main with Character screen
+        navigation.navigate('Main', { screen: 'Character' });
+      } else {
+        Alert.alert('Login Failed', 'Could not establish a session. Please try again.');
+      }
+
     } catch (error: any) {
       Alert.alert('Authentication Error', error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{isSigningUp ? 'Create Account' : 'Login'}</Text>
+      <Text style={styles.title}>
+        {isSigningUp ? 'Create an Account' : 'Welcome Back'}
+      </Text>
 
       <TextInput
         style={styles.input}
         placeholder="Email"
         placeholderTextColor="#ccc"
-        autoCapitalize="none"
         value={email}
         onChangeText={setEmail}
+        autoCapitalize="none"
+        keyboardType="email-address"
       />
 
       <TextInput
         style={styles.input}
         placeholder="Password"
         placeholderTextColor="#ccc"
-        secureTextEntry
         value={password}
         onChangeText={setPassword}
+        secureTextEntry
       />
 
-      <TouchableOpacity style={styles.button} onPress={handleAuth}>
+      <TouchableOpacity
+        style={[styles.button, loading && styles.buttonDisabled]}
+        onPress={handleAuth}
+        disabled={loading}
+      >
         <Text style={styles.buttonText}>
-          {isSigningUp ? 'Sign Up & Continue' : 'Log In'}
+          {loading
+            ? 'Processing...'
+            : isSigningUp
+              ? 'Sign Up'
+              : 'Sign In'}
         </Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => setIsSigningUp(!isSigningUp)}>
-        <Text style={styles.linkText}>
+      <TouchableOpacity
+        onPress={() => setIsSigningUp(!isSigningUp)}
+        disabled={loading}
+      >
+        <Text style={styles.switchText}>
           {isSigningUp
-            ? 'Already have an account? Log In'
-            : 'No account? Sign Up'}
+            ? 'Already have an account? Sign In'
+            : 'Need an account? Sign Up'}
         </Text>
       </TouchableOpacity>
     </View>
@@ -89,39 +125,45 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   container: {
+    padding: 24,
     backgroundColor: '#1e1e2e',
     flex: 1,
     justifyContent: 'center',
-    padding: 24,
   },
   title: {
-    color: '#fff',
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: 'bold',
+    color: '#f8f8f2',
     textAlign: 'center',
-    marginBottom: 30,
+    marginBottom: 24,
   },
   input: {
+    borderWidth: 1,
+    borderColor: '#aaa',
     backgroundColor: '#2a2a40',
-    padding: 12,
     borderRadius: 8,
-    marginBottom: 16,
+    padding: 12,
     color: '#fff',
+    marginBottom: 16,
   },
   button: {
     backgroundColor: '#4e60d3',
     padding: 14,
     borderRadius: 10,
-    marginBottom: 20,
+    marginVertical: 8,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   buttonText: {
     color: '#fff',
-    fontWeight: '600',
+    fontWeight: 'bold',
     textAlign: 'center',
+    fontSize: 16,
   },
-  linkText: {
+  switchText: {
     color: '#bbb',
     textAlign: 'center',
-    textDecorationLine: 'underline',
+    marginTop: 16,
   },
 });
