@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { useAuth } from '../app/AuthProvider';
 import { Character } from '../types/characterTypes';
 import { supabase } from '../app/supabase';
@@ -17,7 +17,6 @@ export default function CharacterScreen() {
   const [loading, setLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
 
-  // Redirect if not authenticated
   useEffect(() => {
     if (!authLoading && !user) {
       Alert.alert('Not Authenticated', 'Please sign in to continue');
@@ -180,58 +179,63 @@ export default function CharacterScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Fixed Title Area */}
       <Text style={styles.title}>{character.name} — Level {character.level}</Text>
       <Text style={styles.pathText}>🏹 No class. No limits. You shape your legend.</Text>
 
-      <View style={styles.xpContainer}>
-        <Text style={styles.xp}>🧭 XP: {character.xp} / {character.level * 1000}</Text>
-        <View style={styles.xpBar}>
-          <View
-            style={[
-              styles.xpProgress,
-              { width: `${(character.xp % 1000) / 10}%` }
-            ]}
-          />
+      {/* Scrollable Content */}
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+        <View style={styles.xpContainer}>
+          <Text style={styles.xp}>🧭 XP: {character.xp} / {character.level * 1000}</Text>
+          <View style={styles.xpBar}>
+            <View
+              style={[
+                styles.xpProgress,
+                { width: `${(character.xp % 1000) / 10}%` }
+              ]}
+            />
+          </View>
         </View>
-      </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionSubtitle}>Your path emerges based on how you train...</Text>
-        {renderStat('💪 Strength', character.strength, '#e63946', 'Gained from upper body & leg days')}
-        {renderStat('⚡ Speed', character.speed, '#f4a261', 'Gained from cardio, HIIT, agility')}
-        {renderStat('🔮 Magic', character.magic, '#6a4c93', 'Gained from yoga, stretching, mobility')}
-        {renderStat('🔥 Willpower', character.willpower, '#2a9d8f', 'Gained from streaks & consistency')}
-      </View>
+        <View style={styles.card}>
+          <Text style={styles.sectionSubtitle}>Your path emerges based on how you train...</Text>
+          {renderStat('💪 Strength', character.strength, '#e63946', 'Gained from upper body & leg days')}
+          {renderStat('⚡ Speed', character.speed, '#f4a261', 'Gained from cardio, HIIT, agility')}
+          {renderStat('🔮 Magic', character.magic, '#6a4c93', 'Gained from yoga, stretching, mobility')}
+          {renderStat('🔥 Willpower', character.willpower, '#2a9d8f', 'Gained from streaks & consistency')}
+        </View>
 
-      <Text style={styles.sectionTitle}>💥 Shape Your Destiny</Text>
-      <TouchableOpacity
-        style={[styles.button, { backgroundColor: '#e63946' }, loading && styles.buttonDisabled]}
-        onPress={() => logWorkout('strength')}
-        disabled={loading}
-      >
-        <Text style={styles.buttonText}>Upper Body / Leg Day</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.button, { backgroundColor: '#f4a261' }, loading && styles.buttonDisabled]}
-        onPress={() => logWorkout('speed')}
-        disabled={loading}
-      >
-        <Text style={styles.buttonText}>Cardio / HIIT</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.button, { backgroundColor: '#6a4c93' }, loading && styles.buttonDisabled]}
-        onPress={() => logWorkout('magic')}
-        disabled={loading}
-      >
-        <Text style={styles.buttonText}>Yoga / Flexibility</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.button, { backgroundColor: '#2a9d8f' }, loading && styles.buttonDisabled]}
-        onPress={() => logWorkout('willpower')}
-        disabled={loading}
-      >
-        <Text style={styles.buttonText}>Streak Workout</Text>
-      </TouchableOpacity>
+        <Text style={styles.sectionTitle}>💥 Shape Your Destiny</Text>
+
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: '#e63946' }, loading && styles.buttonDisabled]}
+          onPress={() => logWorkout('strength')}
+          disabled={loading}
+        >
+          <Text style={styles.buttonText}>Upper Body / Leg Day</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: '#f4a261' }, loading && styles.buttonDisabled]}
+          onPress={() => logWorkout('speed')}
+          disabled={loading}
+        >
+          <Text style={styles.buttonText}>Cardio / HIIT</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: '#6a4c93' }, loading && styles.buttonDisabled]}
+          onPress={() => logWorkout('magic')}
+          disabled={loading}
+        >
+          <Text style={styles.buttonText}>Yoga / Flexibility</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: '#2a9d8f' }, loading && styles.buttonDisabled]}
+          onPress={() => logWorkout('willpower')}
+          disabled={loading}
+        >
+          <Text style={styles.buttonText}>Streak Workout</Text>
+        </TouchableOpacity>
+      </ScrollView>
     </View>
   );
 }

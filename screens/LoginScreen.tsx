@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert } from 'react-native';
-import { useAuth } from '../app/AuthProvider'; // adjust path as needed
-import { supabase } from '../app/supabase'
+import React, { useState, useRef } from 'react';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, Animated, Easing, KeyboardAvoidingView, Platform } from 'react-native';
+import { useAuth } from '../app/AuthProvider';
+import { supabase } from '../app/supabase';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
+import { LinearGradient } from 'expo-linear-gradient';
 
 type LoginScreenProps = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -12,6 +13,36 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   const [password, setPassword] = useState('');
   const [isSigningUp, setIsSigningUp] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [focusedInput, setFocusedInput] = useState<string | null>(null);
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const buttonScale = useRef(new Animated.Value(1)).current;
+
+  React.useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: true,
+    }).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.05,
+          duration: 1000,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.ease),
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.ease),
+        }),
+      ])
+    ).start();
+  }, []);
 
   const handleAuth = async () => {
     if (!email || !password) {
@@ -25,44 +56,34 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       let authResponse;
 
       if (isSigningUp) {
-        authResponse = await supabase.auth.signUp({
-          email,
-          password,
-        });
+        authResponse = await supabase.auth.signUp({ email, password });
 
         if (authResponse.error) throw authResponse.error;
 
         if (authResponse.data?.user?.identities?.length === 0) {
-          Alert.alert('Error', 'This email is already registered. Please sign in instead.');
+          Alert.alert('Error', 'This email is already registered.');
           setIsSigningUp(false);
           setLoading(false);
           return;
         }
 
         if (!authResponse.data.session) {
-          Alert.alert('Verification Required', 'Please check your email to verify your account before logging in.');
+          Alert.alert('Verify Email', 'Check your inbox to verify your account.');
           setIsSigningUp(false);
           setLoading(false);
           return;
         }
       } else {
-        authResponse = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        authResponse = await supabase.auth.signInWithPassword({ email, password });
 
         if (authResponse.error) throw authResponse.error;
       }
 
-      console.log('Auth successful:', authResponse.data.user);
-
       if (authResponse.data.session) {
-        // Navigate directly to Main with Character screen
         navigation.navigate('Main', { screen: 'Character' });
       } else {
-        Alert.alert('Login Failed', 'Could not establish a session. Please try again.');
+        Alert.alert('Login Failed', 'No session created.');
       }
-
     } catch (error: any) {
       Alert.alert('Authentication Error', error.message);
     } finally {
@@ -70,68 +91,139 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
     }
   };
 
+  const animateButtonPress = () => {
+    Animated.sequence([
+      Animated.spring(buttonScale, {
+        toValue: 0.95,
+        useNativeDriver: true,
+      }),
+      Animated.spring(buttonScale, {
+        toValue: 1,
+        friction: 3,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>
-        {isSigningUp ? 'Create an Account' : 'Welcome Back'}
-      </Text>
-
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        placeholderTextColor="#ccc"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-      />
-
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        placeholderTextColor="#ccc"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
-
-      <TouchableOpacity
-        style={[styles.button, loading && styles.buttonDisabled]}
-        onPress={handleAuth}
-        disabled={loading}
+    <LinearGradient colors={['#0f0c29', '#302b63', '#24243e']} style={styles.gradient}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
       >
-        <Text style={styles.buttonText}>
-          {loading
-            ? 'Processing...'
-            : isSigningUp
-              ? 'Sign Up'
-              : 'Sign In'}
-        </Text>
-      </TouchableOpacity>
+        <View style={styles.outerContainer}>
+          {/* BIG "Fit Realm" Logo */}
+          <Animated.Text style={[styles.logo, { opacity: fadeAnim, transform: [{ scale: pulseAnim }] }]}>
+            Fit Realm
+          </Animated.Text>
 
-      <TouchableOpacity
-        onPress={() => setIsSigningUp(!isSigningUp)}
-        disabled={loading}
-      >
-        <Text style={styles.switchText}>
-          {isSigningUp
-            ? 'Already have an account? Sign In'
-            : 'Need an account? Sign Up'}
-        </Text>
-      </TouchableOpacity>
-    </View>
+          <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+            <Animated.Text style={[styles.title, { transform: [{ scale: pulseAnim }] }]}>
+              {isSigningUp ? '✨ Create an Account' : '⚡ Welcome Back'}
+            </Animated.Text>
+
+            <TextInput
+              style={[
+                styles.input,
+                focusedInput === 'email' && styles.inputFocused,
+              ]}
+              placeholder="Email"
+              placeholderTextColor="#aaa"
+              value={email}
+              onFocus={() => setFocusedInput('email')}
+              onBlur={() => setFocusedInput(null)}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+
+            <TextInput
+              style={[
+                styles.input,
+                focusedInput === 'password' && styles.inputFocused,
+              ]}
+              placeholder="Password"
+              placeholderTextColor="#aaa"
+              value={password}
+              onFocus={() => setFocusedInput('password')}
+              onBlur={() => setFocusedInput(null)}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+
+            <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+              <TouchableOpacity
+                style={[styles.button, loading && styles.buttonDisabled]}
+                onPress={() => {
+                  animateButtonPress();
+                  handleAuth();
+                }}
+                activeOpacity={0.8}
+                disabled={loading}
+              >
+                <Text style={styles.buttonText}>
+                  {loading
+                    ? 'Loading...'
+                    : isSigningUp
+                      ? 'Sign Up'
+                      : 'Sign In'}
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+
+            <TouchableOpacity
+              onPress={() => setIsSigningUp(!isSigningUp)}
+              activeOpacity={0.6}
+              disabled={loading}
+            >
+              <Text style={styles.switchText}>
+                {isSigningUp
+                  ? 'Already have an account? Sign In'
+                  : 'No account yet? Sign Up'}
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 24,
-    backgroundColor: '#1e1e2e',
+  gradient: {
+    flex: 1,
+  },
+  outerContainer: {
     flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  logo: {
+    fontSize: 50,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 40,
+    textAlign: 'center',
+    letterSpacing: 2,
+    textShadowColor: '#4e60d3',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 10,
+  },
+  container: {
+    width: '100%',
+    backgroundColor: '#1e1e2e',
+    borderRadius: 20,
+    padding: 24,
+    elevation: 10,
+    shadowColor: '#4e60d3',
+    shadowOpacity: 0.4,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 10,
   },
   title: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: 'bold',
     color: '#f8f8f2',
     textAlign: 'center',
@@ -139,18 +231,22 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: '#aaa',
+    borderColor: '#555',
     backgroundColor: '#2a2a40',
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 12,
+    padding: 14,
     color: '#fff',
     marginBottom: 16,
+    fontSize: 16,
+  },
+  inputFocused: {
+    borderColor: '#4e60d3',
   },
   button: {
     backgroundColor: '#4e60d3',
     padding: 14,
-    borderRadius: 10,
-    marginVertical: 8,
+    borderRadius: 12,
+    marginVertical: 12,
   },
   buttonDisabled: {
     opacity: 0.6,
@@ -159,11 +255,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     textAlign: 'center',
-    fontSize: 16,
+    fontSize: 18,
   },
   switchText: {
     color: '#bbb',
     textAlign: 'center',
     marginTop: 16,
+    fontSize: 14,
   },
 });

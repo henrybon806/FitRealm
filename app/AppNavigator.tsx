@@ -8,12 +8,14 @@ import CharacterScreen from '../screens/CharacterScreen';
 import QuestScreen from '../screens/QuestScreen';
 import { RootStackParamList } from '../types/navigation';
 import { RouteProp } from '@react-navigation/native';
+import RewardsScreen from '../screens/Rewards';
+import { ScrollView } from 'react-native'; // don't forget to import this
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type MainTabsProps = {
   route: RouteProp<RootStackParamList, 'Main'>;
 };
 
-// For tab icons (you can use a library like react-native-vector-icons later)
 const TabIcon = ({ name, focused }: { name: string, focused: boolean }) => (
   <Text style={{ 
     fontSize: 20, 
@@ -54,6 +56,13 @@ function MainTabs({ route }: MainTabsProps) {
         component={QuestScreen}
         options={{
           tabBarIcon: ({ focused }) => <TabIcon name="Quests" focused={focused} />
+        }}
+      />
+      <Tab.Screen 
+        name="Rewards" 
+        component={RewardsScreen} // Add the RewardsScreen here
+        options={{
+          tabBarIcon: ({ focused }) => <TabIcon name="Rewards" focused={focused} />
         }}
       />
     </Tab.Navigator>

@@ -11,4 +11,9 @@ export type RootStackParamList = {
     Quests: undefined;
   };
   
+  export type BottomTabParamList = {
+    Character: undefined;
+    Quests: undefined;
+    Rewards: undefined;
+  };
 
