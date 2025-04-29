@@ -26,10 +26,13 @@ export default function RewardsScreen() {
   const earnedRewardIds = rewards.map(reward => reward.id);
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>🏆 Rewards</Text>
-      <Text style={styles.subtitle}>Here’s your progress on all available rewards!</Text>
+    <View style={styles.container}>
+      <View style={{ paddingHorizontal: 16, paddingTop: 10 }}>
+        <Text style={styles.title}>🏆 Rewards</Text>
+        <Text style={styles.subtitle}>Here’s your progress on all available rewards!</Text>
+      </View>
 
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20 }}>
       {MOCK_REWARDS.map((reward) => {
         const earned = earnedRewardIds.includes(reward.id);
         return (
@@ -52,7 +55,8 @@ export default function RewardsScreen() {
           </View>
         );
       })}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -60,7 +64,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#1e1e2e',
-    padding: 16,
+    padding: 0,
   },
   title: {
     fontSize: 28,

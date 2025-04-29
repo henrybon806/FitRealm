@@ -5,8 +5,8 @@ import { supabase } from '../app/supabase';
 import { useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { BottomTabParamList } from '../types/navigation';
-import { RootStackParamList } from '../types/navigation';
 import { useAuth } from '../app/AuthProvider';
+import { SafeAreaView } from 'react-native-safe-area-context'; // Import SafeAreaView if you haven't
 
 type QuestScreenNavigationProp = BottomTabNavigationProp<BottomTabParamList, 'Quests'>;
 const MOCK_QUESTS: Quest[] = [
@@ -174,46 +174,52 @@ export default function QuestScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>🔮 Daily Quests</Text>
-      <Text style={styles.subtitle}>Complete quests to earn XP and unlock rewards!</Text>
+    <View style={styles.container}>
+      {/* Fixed title and subtitle */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 10 }}>
+        <Text style={styles.title}>🔮 Daily Quests</Text>
+        <Text style={styles.subtitle}>Complete quests to earn XP and unlock rewards!</Text>
+      </View>
 
-      {quests.map((quest) => (
-        <View key={quest.id} style={styles.questCard}>
-          <View style={[styles.questTypeIndicator, getQuestTypeStyle(quest.type)]} />
-          <View style={styles.questContent}>
-            <Text style={styles.questTitle}>{quest.title}</Text>
-            <Text style={styles.questDifficulty}>
-              {getDifficultyStars(quest.difficulty)} • {quest.type.charAt(0).toUpperCase() + quest.type.slice(1)}
-            </Text>
-            <Text style={styles.questDescription}>{quest.description}</Text>
-            <View style={styles.questReward}>
-              <Text style={styles.questRewardText}>Reward: {quest.xpReward} XP</Text>
-            </View>
-
-            {quest.completed ? (
-              <View style={styles.completedBadge}>
-                <Text style={styles.completedText}>COMPLETED</Text>
+      {/* Scrollable quests list */}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20 }}>
+        {quests.map((quest) => (
+          <View key={quest.id} style={styles.questCard}>
+            <View style={[styles.questTypeIndicator, getQuestTypeStyle(quest.type)]} />
+            <View style={styles.questContent}>
+              <Text style={styles.questTitle}>{quest.title}</Text>
+              <Text style={styles.questDifficulty}>
+                {getDifficultyStars(quest.difficulty)} • {quest.type.charAt(0).toUpperCase() + quest.type.slice(1)}
+              </Text>
+              <Text style={styles.questDescription}>{quest.description}</Text>
+              <View style={styles.questReward}>
+                <Text style={styles.questRewardText}>Reward: {quest.xpReward} XP</Text>
               </View>
-            ) : quest.accepted ? (
-              <TouchableOpacity
-                style={[styles.questButton, styles.completeButton]}
-                onPress={() => completeQuest(quest.id)}
-              >
-                <Text style={styles.buttonText}>Mark Completed</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.questButton}
-                onPress={() => acceptQuest(quest.id)}
-              >
-                <Text style={styles.buttonText}>Accept Quest</Text>
-              </TouchableOpacity>
-            )}
+
+              {quest.completed ? (
+                <View style={styles.completedBadge}>
+                  <Text style={styles.completedText}>COMPLETED</Text>
+                </View>
+              ) : quest.accepted ? (
+                <TouchableOpacity
+                  style={[styles.questButton, styles.completeButton]}
+                  onPress={() => completeQuest(quest.id)}
+                >
+                  <Text style={styles.buttonText}>Mark Completed</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.questButton}
+                  onPress={() => acceptQuest(quest.id)}
+                >
+                  <Text style={styles.buttonText}>Accept Quest</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
-        </View>
-      ))}
-    </ScrollView>
+        ))}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -249,7 +255,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#1e1e2e',
-    padding: 16,
+    padding: 0,
   },
   loadingContainer: {
     flex: 1,

@@ -2,15 +2,16 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer } from '@react-navigation/native'; // important
 import LoginScreen from '../screens/LoginScreen';
 import CharacterScreen from '../screens/CharacterScreen';
 import QuestScreen from '../screens/QuestScreen';
+import RewardsScreen from '../screens/Rewards';
 import { RootStackParamList } from '../types/navigation';
 import { RouteProp } from '@react-navigation/native';
-import RewardsScreen from '../screens/Rewards';
-import { ScrollView } from 'react-native'; // don't forget to import this
-import { SafeAreaView } from 'react-native-safe-area-context';
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
+const Tab = createBottomTabNavigator();
 
 type MainTabsProps = {
   route: RouteProp<RootStackParamList, 'Main'>;
@@ -26,11 +27,8 @@ const TabIcon = ({ name, focused }: { name: string, focused: boolean }) => (
   </Text>
 );
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
-const Tab = createBottomTabNavigator();
-
 function MainTabs({ route }: MainTabsProps) {
-  const initialRouteName = route.params?.screen ?? 'Character'
+  const initialRouteName = route.params?.screen ?? 'Character';
   return (
     <Tab.Navigator
       initialRouteName={initialRouteName}
@@ -60,7 +58,7 @@ function MainTabs({ route }: MainTabsProps) {
       />
       <Tab.Screen 
         name="Rewards" 
-        component={RewardsScreen} // Add the RewardsScreen here
+        component={RewardsScreen}
         options={{
           tabBarIcon: ({ focused }) => <TabIcon name="Rewards" focused={focused} />
         }}
