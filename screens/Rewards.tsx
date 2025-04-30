@@ -4,7 +4,6 @@ import {
   Text, 
   StyleSheet, 
   ScrollView, 
-  Alert, 
   TouchableOpacity, 
   ActivityIndicator 
 } from 'react-native';
@@ -13,7 +12,6 @@ import { OPENAI_KEY } from '@env';
 import { supabase } from '../app/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Types
 type QuestType = 'strength' | 'speed' | 'magic' | 'willpower';
@@ -104,7 +102,9 @@ export default function RewardsScreen() {
         
         // Count completed quests by type
         const counts = questsData.reduce((acc, quest) => {
-          acc[quest.type] = (acc[quest.type] || 0) + 1;
+          if (quest.type) {
+            acc[quest.type] = (acc[quest.type] || 0) + 1;
+          }
           return acc;
         }, { strength: 0, speed: 0, magic: 0, willpower: 0 } as Record<QuestType, number>);
         
@@ -128,14 +128,27 @@ export default function RewardsScreen() {
         // If no rewards exist, create initial ones
         const initialRewards = generateInitialRewards(user.id);
         
-        const { data: insertedRewards, error: insertError } = await supabase
-          .from('rewards')
-          .insert(initialRewards)
-          .select();
-          
-        if (insertError) {
-          console.error("Error inserting initial rewards:", insertError);
-        } else if (insertedRewards) {
+        // Insert one reward at a time to avoid primary key conflicts
+        let insertedRewards = [];
+        
+        for (const reward of initialRewards) {
+          try {
+            const { data, error } = await supabase
+              .from('rewards')
+              .insert(reward)
+              .select();
+              
+            if (error) {
+              console.error(`Error inserting reward: ${reward.title}`, error);
+            } else if (data && data.length > 0) {
+              insertedRewards.push(data[0]);
+            }
+          } catch (err) {
+            console.error(`Failed to insert reward: ${reward.title}`, err);
+          }
+        }
+        
+        if (insertedRewards.length > 0) {
           console.log(`Successfully created ${insertedRewards.length} initial rewards`);
           setAvailableRewards(insertedRewards);
         } else {
@@ -148,6 +161,7 @@ export default function RewardsScreen() {
         
         // Set rewards in auth context
         const earnedRewards = rewardsData.filter(r => r.earned || r.date_earned);
+        console.log(`Found ${earnedRewards.length} earned rewards`);
         setRewards(earnedRewards);
       }
 
@@ -225,11 +239,11 @@ export default function RewardsScreen() {
           newEarned = true;
             
           // Show celebration alert
-          Alert.alert(
-            '🎉 Reward Earned!',
-            `Congratulations! You've earned "${reward.title}"`,
-            [{ text: 'Awesome!', style: 'default' }]
-          );
+          // Alert.alert(
+          //   '🎉 Reward Earned!',
+          //   `Congratulations! You've earned "${reward.title}"`,
+          //   [{ text: 'Awesome!', style: 'default' }]
+          // );
         }
       }
 
@@ -239,6 +253,7 @@ export default function RewardsScreen() {
         
         // Update the rewards in context
         const earnedRewards = updatedRewards.filter(r => r.earned || r.date_earned);
+        console.log(`Setting ${earnedRewards.length} earned rewards in context`);
         setRewards(earnedRewards);
       }
     } catch (error) {
@@ -354,19 +369,27 @@ export default function RewardsScreen() {
         user_id: userId
       }));
       
-      // Save to database
-      console.log("Inserting new rewards to database...");
-      const { data: insertedRewards, error: insertError } = await supabase
-        .from('rewards')
-        .insert(newRewards)
-        .select();
+      // Insert rewards one by one to avoid primary key conflicts
+      let insertedRewards = [];
       
-      if (insertError) {
-        console.error("Error inserting new rewards:", insertError);
-        return;
+      for (const reward of newRewards) {
+        try {
+          const { data, error } = await supabase
+            .from('rewards')
+            .insert(reward)
+            .select();
+            
+          if (error) {
+            console.error(`Error inserting reward: ${reward.title}`, error);
+          } else if (data && data.length > 0) {
+            insertedRewards.push(data[0]);
+          }
+        } catch (err) {
+          console.error(`Failed to insert reward: ${reward.title}`, err);
+        }
       }
       
-      if (insertedRewards) {
+      if (insertedRewards.length > 0) {
         console.log(`Successfully inserted ${insertedRewards.length} new rewards`);
         // Update with the inserted rewards that have IDs from the database
         setAvailableRewards(prev => [...prev, ...insertedRewards]);
@@ -390,6 +413,13 @@ export default function RewardsScreen() {
     }
   };
 
+  // Debug function to log rewards data
+  const logRewardsData = () => {
+    console.log("Available rewards:", availableRewards);
+    console.log("Earned rewards count:", availableRewards.filter(r => r.earned || r.date_earned).length);
+    console.log("Auth context rewards:", rewards);
+  };
+
   // Sort rewards by earned status and difficulty
   const sortedRewards = [...availableRewards].sort((a, b) => {
     // First sort by earned status (unearned first)
@@ -404,22 +434,15 @@ export default function RewardsScreen() {
   // UI Rendering
   if (loading) {
     return (
-      <LinearGradient 
-        colors={['#1e1e2e', '#2a2a40']} 
-        style={styles.loadingContainer}
-      >
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#ffd700" />
         <Text style={styles.loadingText}>Loading rewards...</Text>
-      </LinearGradient>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <LinearGradient 
-        colors={['#1e1e2e', '#2a2a40']} 
-        style={styles.gradientBackground}
-      >
+      <View style={styles.container}>
         <ScrollView contentContainerStyle={styles.scroll}>
           {/* Header */}
           <View style={styles.header}>
@@ -453,6 +476,15 @@ export default function RewardsScreen() {
             </View>
           </View>
           
+          {/* Reload button */}
+          <TouchableOpacity 
+            style={styles.reloadButton} 
+            onPress={fetchData}
+          >
+            <MaterialCommunityIcons name="refresh" size={16} color="#fff" />
+            <Text style={styles.reloadButtonText}>Reload Rewards</Text>
+          </TouchableOpacity>
+          
           {/* Rewards List */}
           {sortedRewards.length === 0 ? (
             <View style={styles.emptyContainer}>
@@ -477,67 +509,129 @@ export default function RewardsScreen() {
           ) : (
             // Regular rewards display
             <>
-              {sortedRewards.map((reward) => {
-                const isEarned = reward.earned || reward.date_earned;
-                return (
-                  <LinearGradient 
-                    key={reward.id} 
-                    colors={BADGE_COLORS[reward.difficulty]}
-                    start={{x: 0, y: 0}} 
-                    end={{x: 1, y: 0}}
-                    style={styles.rewardBorder}
-                  >
-                    <View style={styles.rewardCard}>
-                      <View style={styles.rewardHeader}>
-                        <View style={styles.titleContainer}>
-                          <MaterialCommunityIcons 
-                            name={TYPE_ICONS[reward.type]} 
-                            size={20} 
-                            color={TYPE_COLORS[reward.type][0]} 
-                          />
-                          <Text style={styles.rewardTitle}>{reward.title}</Text>
-                        </View>
-                        <View style={[
-                          styles.difficultyBadge, 
-                          {backgroundColor: BADGE_COLORS[reward.difficulty][0]}
-                        ]}>
-                          <Text style={styles.difficultyText}>{reward.difficulty}</Text>
-                        </View>
-                      </View>
-                      
-                      <Text style={styles.rewardDescription}>{reward.description}</Text>
-                      
-                      <View style={styles.rewardFooter}>
-                        <View style={styles.progressContainer}>
-                          <Text style={styles.progressText}>
-                            {isEarned ? 'Completed!' : `${questCounts[reward.type]}/${reward.requirement} ${reward.type} quests`}
-                          </Text>
-                          <View style={styles.progressBarOuter}>
-                            <View style={[
-                              styles.progressBarInner, 
-                              {
-                                width: `${Math.min(100, (questCounts[reward.type] / reward.requirement) * 100)}%`,
-                                backgroundColor: TYPE_COLORS[reward.type][0]
-                              }
-                            ]} />
+              {/* Section: Rewards In Progress */}
+              <Text style={styles.sectionTitle}>Rewards In Progress</Text>
+              {sortedRewards.filter(r => !r.earned && !r.date_earned).length === 0 ? (
+                <Text style={styles.emptyStateText}>No rewards in progress</Text>
+              ) : (
+                sortedRewards.filter(r => !r.earned && !r.date_earned).map((reward, index) => {
+                  const uniqueKey = `reward-in-progress-${reward.id || index}`;
+                  return (
+                    <View 
+                      key={uniqueKey}
+                      style={[styles.rewardBorder, { borderColor: BADGE_COLORS[reward.difficulty][0] }]}
+                    >
+                      <View style={styles.rewardCard}>
+                        <View style={styles.rewardHeader}>
+                          <View style={styles.titleContainer}>
+                            <MaterialCommunityIcons 
+                              name={TYPE_ICONS[reward.type]} 
+                              size={20} 
+                              color={TYPE_COLORS[reward.type][0]} 
+                            />
+                            <Text style={styles.rewardTitle}>{reward.title}</Text>
+                          </View>
+                          <View style={[
+                            styles.difficultyBadge, 
+                            {backgroundColor: BADGE_COLORS[reward.difficulty][0]}
+                          ]}>
+                            <Text style={styles.difficultyText}>{reward.difficulty}</Text>
                           </View>
                         </View>
                         
-                        <View style={isEarned ? styles.completedBadge : styles.notEarnedBadge}>
-                          <MaterialCommunityIcons 
-                            name={isEarned ? 'check-circle' : 'clock-outline'} 
-                            size={18} 
-                            color={isEarned ? '#2a9d8f' : '#e63946'} 
-                          />
-                          <Text style={isEarned ? styles.completedText : styles.notEarnedText}>
-                            {isEarned ? 'Earned' : 'In Progress'}
-                          </Text>
+                        <Text style={styles.rewardDescription}>{reward.description}</Text>
+                        
+                        <View style={styles.rewardFooter}>
+                          <View style={styles.progressContainer}>
+                            <Text style={styles.progressText}>
+                              {`${questCounts[reward.type]}/${reward.requirement} ${reward.type} quests`}
+                            </Text>
+                            <View style={styles.progressBarOuter}>
+                              <View style={[
+                                styles.progressBarInner, 
+                                {
+                                  width: `${Math.min(100, (questCounts[reward.type] / reward.requirement) * 100)}%`,
+                                  backgroundColor: TYPE_COLORS[reward.type][0]
+                                }
+                              ]} />
+                            </View>
+                          </View>
+                          
+                          <View style={styles.notEarnedBadge}>
+                            <MaterialCommunityIcons 
+                              name="clock-outline"
+                              size={18} 
+                              color="#e63946"
+                            />
+                            <Text style={styles.notEarnedText}>In Progress</Text>
+                          </View>
                         </View>
                       </View>
                     </View>
-                  </LinearGradient>
-                );
-              })}
+                  );
+                })
+              )}
+              
+              {/* Section: Earned Rewards */}
+              <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Earned Rewards</Text>
+              {sortedRewards.filter(r => r.earned || r.date_earned).length === 0 ? (
+                <Text style={styles.emptyStateText}>No rewards earned yet</Text>
+              ) : (
+                sortedRewards.filter(r => r.earned || r.date_earned).map((reward, index) => {
+                  const uniqueKey = `reward-earned-${reward.id || index}`;
+                  return (
+                    <View 
+                      key={uniqueKey}
+                      style={[styles.rewardBorder, { borderColor: BADGE_COLORS[reward.difficulty][0] }]}
+                    >
+                      <View style={styles.rewardCard}>
+                        <View style={styles.rewardHeader}>
+                          <View style={styles.titleContainer}>
+                            <MaterialCommunityIcons 
+                              name={TYPE_ICONS[reward.type]} 
+                              size={20} 
+                              color={TYPE_COLORS[reward.type][0]} 
+                            />
+                            <Text style={styles.rewardTitle}>{reward.title}</Text>
+                          </View>
+                          <View style={[
+                            styles.difficultyBadge, 
+                            {backgroundColor: BADGE_COLORS[reward.difficulty][0]}
+                          ]}>
+                            <Text style={styles.difficultyText}>{reward.difficulty}</Text>
+                          </View>
+                        </View>
+                        
+                        <Text style={styles.rewardDescription}>{reward.description}</Text>
+                        
+                        <View style={styles.rewardFooter}>
+                          <View style={styles.progressContainer}>
+                            <Text style={styles.progressText}>Completed!</Text>
+                            <View style={styles.progressBarOuter}>
+                              <View style={[
+                                styles.progressBarInner, 
+                                {
+                                  width: '100%',
+                                  backgroundColor: TYPE_COLORS[reward.type][0]
+                                }
+                              ]} />
+                            </View>
+                          </View>
+                          
+                          <View style={styles.completedBadge}>
+                            <MaterialCommunityIcons 
+                              name="check-circle"
+                              size={18} 
+                              color="#2a9d8f"
+                            />
+                            <Text style={styles.completedText}>Earned</Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
               
               {/* Generate More Button */}
               <TouchableOpacity 
@@ -561,8 +655,7 @@ export default function RewardsScreen() {
             </>
           )}
         </ScrollView>
-      </LinearGradient>
-    </SafeAreaView>
+      </View>
   );
 }
 
@@ -571,22 +664,53 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1e1e2e',
   },
-  gradientBackground: {
-    flex: 1,
-  },
-  scroll: {
-    padding: 16,
-    paddingBottom: 32,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#1e1e2e',
   },
   loadingText: {
     color: '#fff',
     marginTop: 10,
     fontSize: 16,
+  },
+  scroll: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  
+  // Reload button
+  reloadButton: {
+    backgroundColor: '#2a9d8f',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 16,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  reloadButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  
+  // Section titles
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#f8f8f2',
+    marginBottom: 12,
+  },
+  emptyStateText: {
+    color: '#888',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 16,
+    fontStyle: 'italic',
   },
   
   // Empty state
@@ -658,11 +782,11 @@ const styles = StyleSheet.create({
   rewardBorder: {
     marginBottom: 16,
     borderRadius: 12,
-    padding: 2,
+    borderWidth: 2,
+    overflow: 'hidden',
   },
   rewardCard: {
     backgroundColor: '#2a2a40',
-    borderRadius: 10,
     padding: 16,
   },
   rewardHeader: {

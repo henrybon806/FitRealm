@@ -1,10 +1,22 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, Animated, Easing, KeyboardAvoidingView, Platform } from 'react-native';
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  StyleSheet, 
+  TouchableOpacity, 
+  Alert, 
+  Animated, 
+  Easing, 
+  KeyboardAvoidingView, 
+  Platform,
+  SafeAreaView
+} from 'react-native';
 import { useAuth } from '../app/AuthProvider';
 import { supabase } from '../app/supabase';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
-import { LinearGradient } from 'expo-linear-gradient';
+// Remove LinearGradient import and use View instead
 
 type LoginScreenProps = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -80,11 +92,17 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       }
 
       if (authResponse.data.session) {
-        navigation.navigate('Main', { screen: 'Character' });
+        try {
+          navigation.navigate('Main', { screen: 'Character' });
+        } catch (navError) {
+          console.error("Navigation error:", navError);
+          Alert.alert('Navigation Error', 'Could not navigate to Character screen');
+        }
       } else {
         Alert.alert('Login Failed', 'No session created.');
       }
     } catch (error: any) {
+      console.error("Authentication error:", error);
       Alert.alert('Authentication Error', error.message);
     } finally {
       setLoading(false);
@@ -107,92 +125,100 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   };
 
   return (
-    <LinearGradient colors={['#0f0c29', '#302b63', '#24243e']} style={styles.gradient}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
-        <View style={styles.outerContainer}>
-          {/* BIG "Fit Realm" Logo */}
-          <Animated.Text style={[styles.logo, { opacity: fadeAnim, transform: [{ scale: pulseAnim }] }]}>
-            Fit Realm
-          </Animated.Text>
-
-          <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-            <Animated.Text style={[styles.title, { transform: [{ scale: pulseAnim }] }]}>
-              {isSigningUp ? '✨ Create an Account' : '⚡ Welcome Back'}
+    <SafeAreaView style={styles.safeArea}>
+      {/* Using View with background colors instead of LinearGradient */}
+      <View style={styles.gradientContainer}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.outerContainer}>
+            {/* BIG "Fit Realm" Logo */}
+            <Animated.Text style={[styles.logo, { opacity: fadeAnim, transform: [{ scale: pulseAnim }] }]}>
+              Fit Realm
             </Animated.Text>
 
-            <TextInput
-              style={[
-                styles.input,
-                focusedInput === 'email' && styles.inputFocused,
-              ]}
-              placeholder="Email"
-              placeholderTextColor="#aaa"
-              value={email}
-              onFocus={() => setFocusedInput('email')}
-              onBlur={() => setFocusedInput(null)}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
+            <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+              <Animated.Text style={[styles.title, { transform: [{ scale: pulseAnim }] }]}>
+                {isSigningUp ? '✨ Create an Account' : '⚡ Welcome Back'}
+              </Animated.Text>
 
-            <TextInput
-              style={[
-                styles.input,
-                focusedInput === 'password' && styles.inputFocused,
-              ]}
-              placeholder="Password"
-              placeholderTextColor="#aaa"
-              value={password}
-              onFocus={() => setFocusedInput('password')}
-              onBlur={() => setFocusedInput(null)}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+              <TextInput
+                style={[
+                  styles.input,
+                  focusedInput === 'email' && styles.inputFocused,
+                ]}
+                placeholder="Email"
+                placeholderTextColor="#aaa"
+                value={email}
+                onFocus={() => setFocusedInput('email')}
+                onBlur={() => setFocusedInput(null)}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
 
-            <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+              <TextInput
+                style={[
+                  styles.input,
+                  focusedInput === 'password' && styles.inputFocused,
+                ]}
+                placeholder="Password"
+                placeholderTextColor="#aaa"
+                value={password}
+                onFocus={() => setFocusedInput('password')}
+                onBlur={() => setFocusedInput(null)}
+                onChangeText={setPassword}
+                secureTextEntry
+              />
+
+              <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+                <TouchableOpacity
+                  style={[styles.button, loading && styles.buttonDisabled]}
+                  onPress={() => {
+                    animateButtonPress();
+                    handleAuth();
+                  }}
+                  activeOpacity={0.8}
+                  disabled={loading}
+                >
+                  <Text style={styles.buttonText}>
+                    {loading
+                      ? 'Loading...'
+                      : isSigningUp
+                        ? 'Sign Up'
+                        : 'Sign In'}
+                  </Text>
+                </TouchableOpacity>
+              </Animated.View>
+
               <TouchableOpacity
-                style={[styles.button, loading && styles.buttonDisabled]}
-                onPress={() => {
-                  animateButtonPress();
-                  handleAuth();
-                }}
-                activeOpacity={0.8}
+                onPress={() => setIsSigningUp(!isSigningUp)}
+                activeOpacity={0.6}
                 disabled={loading}
               >
-                <Text style={styles.buttonText}>
-                  {loading
-                    ? 'Loading...'
-                    : isSigningUp
-                      ? 'Sign Up'
-                      : 'Sign In'}
+                <Text style={styles.switchText}>
+                  {isSigningUp
+                    ? 'Already have an account? Sign In'
+                    : 'No account yet? Sign Up'}
                 </Text>
               </TouchableOpacity>
             </Animated.View>
-
-            <TouchableOpacity
-              onPress={() => setIsSigningUp(!isSigningUp)}
-              activeOpacity={0.6}
-              disabled={loading}
-            >
-              <Text style={styles.switchText}>
-                {isSigningUp
-                  ? 'Already have an account? Sign In'
-                  : 'No account yet? Sign Up'}
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </View>
-      </KeyboardAvoidingView>
-    </LinearGradient>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  gradient: {
+  safeArea: {
     flex: 1,
+    backgroundColor: '#0f0c29',
+  },
+  gradientContainer: {
+    flex: 1,
+    backgroundColor: '#302b63', // Middle color as fallback
   },
   outerContainer: {
     flex: 1,

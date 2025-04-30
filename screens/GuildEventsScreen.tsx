@@ -19,6 +19,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { GuildEvent } from '../types/guildTypes';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FitRealmColors, FitRealmStyles } from '../constants/styles';
+import { OPENAI_KEY } from '@env';
 
 // Type declarations
 type GuildEventsNavigationProp = NativeStackNavigationProp<RootStackParamList, 'GuildEvents'>;
@@ -149,19 +150,34 @@ export default function GuildEventsScreen() {
   const [activeTab, setActiveTab] = useState<'active' | 'upcoming' | 'completed'>('active');
   const [loading, setLoading] = useState<boolean>(true);
   const [joining, setJoining] = useState<string | null>(null);
+  const [generatingEvents, setGeneratingEvents] = useState(false);
+  const [completingEvent, setCompletingEvent] = useState<string | null>(null);
+  const [guildData, setGuildData] = useState<any>(null);
 
+  // Fetch guild details and events
   useEffect(() => {
-    const fetchEvents = async () => {
+    const fetchGuildData = async () => {
       try {
-        const { data, error } = await supabase
+        // Fetch guild details
+        const { data: guild, error: guildError } = await supabase
+          .from('guilds')
+          .select('*')
+          .eq('id', guildId)
+          .single();
+
+        if (guildError) throw guildError;
+        setGuildData(guild);
+
+        // Fetch guild events
+        const { data: eventsData, error: eventsError } = await supabase
           .from('guild_events')
           .select('*')
           .eq('guild_id', guildId)
           .order('start_date', { ascending: true });
 
-        if (error) throw error;
+        if (eventsError) throw eventsError;
 
-        const enriched = data.map((e: any) => ({ ...e, participants_count: e.participants_count || 0 }));
+        const enriched = eventsData.map((e: any) => ({ ...e, participants_count: e.participants_count || 0 }));
         setEvents(enriched);
         setGroupedEvents(groupEventsByStatus(enriched));
       } catch (error) {
@@ -170,30 +186,278 @@ export default function GuildEventsScreen() {
         setLoading(false);
       }
     };
-    fetchEvents();
+    
+    fetchGuildData();
   }, [guildId]);
 
-  const joinEvent = async (eventId: string) => {
-    if (!user) return;
-    setJoining(eventId);
+// This function handles event joining with improved error handling and debugging
+const joinEvent = async (eventId: string) => {
+  if (!user) {
+    Alert.alert('Error', 'You must be logged in to join events');
+    return;
+  }
+  
+  setJoining(eventId);
+  console.log(`Attempting to join event ${eventId} for user ${user.id}`);
+  
+  try {
+    // Get the current event data first
+    const { data: eventData, error: eventFetchError } = await supabase
+      .from('guild_events')
+      .select('participants_count, status')
+      .eq('id', eventId)
+      .single();
+      
+    if (eventFetchError) {
+      console.error('Error fetching event:', eventFetchError);
+      throw eventFetchError;
+    }
+    
+    // Calculate new participants count
+    const currentCount = eventData?.participants_count || 0;
+    const newCount = currentCount + 1;
+    const currentStatus = eventData?.status;
+    
+    // Prepare update data - always increase participant count
+    const updateData: any = { 
+      participants_count: newCount 
+    };
+    
+    // If event is upcoming, change its status to active when someone joins
+    if (currentStatus === 'upcoming') {
+      updateData.status = 'active';
+    }
+    
+    // Update the event with new participant count and possibly status
+    const { error: updateError } = await supabase
+      .from('guild_events')
+      .update(updateData)
+      .eq('id', eventId);
+      
+    if (updateError) {
+      console.error('Error updating event:', updateError);
+      throw updateError;
+    }
+
+    // Update local state - first find the event
+    const eventToUpdate = events.find(ev => ev.id === eventId);
+    if (!eventToUpdate) {
+      throw new Error('Event not found in local state');
+    }
+    
+    // Update the event with new values
+    const updatedEvent = {
+      ...eventToUpdate,
+      participants_count: newCount,
+      // Only change status if it was upcoming
+      status: currentStatus === 'upcoming' ? 'active' : eventToUpdate.status
+    };
+    
+    // Replace the event in the events array
+    const updatedEvents = events.map(ev => 
+      ev.id === eventId ? updatedEvent : ev
+    );
+    
+    // Update state with new events and regroup them
+    setEvents(updatedEvents);
+    setGroupedEvents(groupEventsByStatus(updatedEvents));
+
+    // Show a success message with appropriate text based on status change
+    if (currentStatus === 'upcoming') {
+      Alert.alert(
+        'Success!', 
+        "You've joined the event! It's now active and visible in the Active tab.", 
+        [{ text: 'OK' }]
+      );
+    } else {
+      Alert.alert(
+        'Success!', 
+        "You've joined the event!", 
+        [{ text: 'OK' }]
+      );
+    }
+    
+    // Switch to active tab if event status changed
+    if (currentStatus === 'upcoming') {
+      setActiveTab('active');
+    }
+  } catch (err: any) {
+    console.error('Join event error:', err);
+    Alert.alert('Error', `Could not join the event: ${err.message || 'Unknown error'}`);
+  } finally {
+    setJoining(null);
+  }
+};
+
+  const completeEvent = async (eventId: string) => {
+    if (!user || !guildData) return;
+    setCompletingEvent(eventId);
+    
     try {
-      const { error } = await supabase.from('event_participants').insert({
-        event_id: eventId,
-        user_id: user.id,
-        joined_at: new Date().toISOString(),
-        status: 'joined'
-      });
-      if (error) throw error;
-
-      const updated = events.map(ev => ev.id === eventId ? { ...ev, participants_count: ev.participants_count + 1 } : ev);
-      setEvents(updated);
-      setGroupedEvents(groupEventsByStatus(updated));
-
-      Alert.alert('Success!', "You've joined the event.", [{ text: 'OK' }]);
+      // Get event details
+      const eventToComplete = events.find(e => e.id === eventId);
+      if (!eventToComplete) throw new Error('Event not found');
+      
+      // Update event status to completed
+      const { error: updateError } = await supabase
+        .from('guild_events')
+        .update({ 
+          status: 'completed',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', eventId);
+        
+      if (updateError) throw updateError;
+      
+      // Update guild XP
+      const xpGain = eventToComplete.xp_reward || 100;
+      const newXp = (guildData.xp || 0) + xpGain;
+      
+      const { error: guildUpdateError } = await supabase
+        .from('guilds')
+        .update({ 
+          xp: newXp
+        })
+        .eq('id', guildId);
+        
+      if (guildUpdateError) throw guildUpdateError;
+      
+      // Update local state
+      setGuildData({...guildData, xp: newXp});
+      
+      // Update events list
+      const updatedEvents = events.map(e => 
+        e.id === eventId 
+          ? {...e, status: 'completed', completed_at: new Date().toISOString()} 
+          : e
+      );
+      
+      setEvents(updatedEvents);
+      setGroupedEvents(groupEventsByStatus(updatedEvents));
+      
+      Alert.alert(
+        'Event Completed!', 
+        `Guild has earned ${xpGain} XP for completing this event.`,
+        [{ text: 'Awesome!', style: 'default' }]
+      );
+      
     } catch (err) {
-      Alert.alert('Error', 'Could not join the event.');
+      console.error('Complete event error:', err);
+      Alert.alert('Error', 'Could not complete the event.');
     } finally {
-      setJoining(null);
+      setCompletingEvent(null);
+    }
+  };
+
+  const generateGuildEvents = async () => {
+    if (!user || !guildId) return;
+    setGeneratingEvents(true);
+    
+    try {
+      // Get guild details for context
+      const guildInfo = guildData?.name ? `for a guild called "${guildData.name}"` : "for a fitness guild";
+      const guildMotto = guildData?.motto ? ` with the motto "${guildData.motto}"` : "";
+      
+      // Use OpenAI to generate event ideas
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENAI_KEY}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-3.5-turbo',
+          messages: [
+            {
+              role: 'system',
+              content: `You are an event coordinator for a fitness RPG app. Create 3 exciting guild events ${guildInfo}${guildMotto}. Be creative and make the events sound fun and engaging.`
+            },
+            {
+              role: 'user',
+              content: `Generate 3 random guild events for our fitness RPG app. Each event should include:
+              1. An engaging title
+              2. Event type (challenge, workout, meetup, competition, raid, or tournament)
+              3. A brief description (20-30 words)
+              4. Required workout type (strength, speed, magic, willpower, or any)
+              5. Difficulty level (beginner, intermediate, or advanced)
+              6. XP reward (between 50-300)
+              7. A reward description
+              the description should be an actual workout too, such as upper body etc and then the workout itself like pushups
+              
+              Return JSON array only without explanations or markdown.
+              Example format:
+              [
+                {
+                  "title": "Dawn Warrior Challenge",
+                  "event_type": "challenge",
+                  "description": "Complete a morning workout before 8am for three consecutive days to earn the Dawn Warrior title.",
+                  "required_workout_type": "strength",
+                  "difficulty": "intermediate",
+                  "xp_reward": 150,
+                  "reward_description": "Dawn Warrior title + 150 XP"
+                }
+              ]`
+            }
+          ],
+          temperature: 0.8,
+          max_tokens: 500
+        })
+      });
+      
+      const data = await response.json();
+      if (!data.choices || !data.choices[0]) {
+        throw new Error('Invalid response from OpenAI');
+      }
+      
+      // Parse the generated events
+      const generatedContent = data.choices[0].message.content;
+      const generatedEvents = JSON.parse(generatedContent);
+      
+      // Add needed fields to each event
+      const eventsToInsert = generatedEvents.map((event: any) => ({
+        ...event,
+        guild_id: guildId,
+        creator_id: user.id,
+        status: 'upcoming',
+        start_date: new Date(Date.now() + Math.random() * 3 * 24 * 60 * 60 * 1000).toISOString(), // Random date in next 3 days
+        participants_count: 0
+      }));
+      
+      // Insert events into database
+      for (const event of eventsToInsert) {
+        const { error } = await supabase
+          .from('guild_events')
+          .insert(event);
+          
+        if (error) {
+          console.error('Error inserting event:', error);
+        }
+      }
+      
+      // Refresh events list
+      const { data: refreshedEvents, error: refreshError } = await supabase
+        .from('guild_events')
+        .select('*')
+        .eq('guild_id', guildId)
+        .order('start_date', { ascending: true });
+        
+      if (refreshError) throw refreshError;
+      
+      const enriched = refreshedEvents.map((e: any) => ({ ...e, participants_count: e.participants_count || 0 }));
+      setEvents(enriched);
+      setGroupedEvents(groupEventsByStatus(enriched));
+      
+      Alert.alert(
+        'Events Generated!', 
+        `${eventsToInsert.length} new guild events have been created.`,
+        [{ text: 'Let\'s go!', style: 'default' }]
+      );
+      
+    } catch (err) {
+      console.error('Generate events error:', err);
+      Alert.alert('Error', 'Could not generate new events. Please try again.');
+    } finally {
+      setGeneratingEvents(false);
     }
   };
 
@@ -273,7 +537,44 @@ export default function GuildEventsScreen() {
           </View>
         </View>
 
-        {item.status !== 'completed' ? (
+        {item.status === 'completed' ? (
+          <View style={styles.completedBadgeContainer}>
+            <Icon name="checkmark-circle" size={18} color={FitRealmColors.textSecondary} />
+            <Text style={styles.completedBadge}>Completed</Text>
+          </View>
+        ) : item.status === 'active' ? (
+          <View style={styles.actionButtonsContainer}>
+            <TouchableOpacity
+              style={[styles.joinButton, joining === item.id && styles.joiningButton, styles.actionButton]}
+              onPress={() => joinEvent(item.id)}
+              disabled={joining !== null || completingEvent !== null}
+            >
+              {joining === item.id ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Icon name="log-in" size={18} color="#fff" style={styles.buttonIcon} />
+                  <Text style={styles.buttonText}>Join</Text>
+                </>
+              )}
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.completeButton, completingEvent === item.id && styles.completingButton, styles.actionButton]}
+              onPress={() => completeEvent(item.id)}
+              disabled={joining !== null || completingEvent !== null}
+            >
+              {completingEvent === item.id ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Icon name="checkmark-circle" size={18} color="#fff" style={styles.buttonIcon} />
+                  <Text style={styles.buttonText}>Complete</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : (
           <TouchableOpacity
             style={[styles.joinButton, joining === item.id && styles.joiningButton]}
             onPress={() => joinEvent(item.id)}
@@ -284,17 +585,10 @@ export default function GuildEventsScreen() {
             ) : (
               <>
                 <Icon name="log-in" size={18} color="#fff" style={styles.joinButtonIcon} />
-                <Text style={styles.joinButtonText}>
-                  {item.status === 'active' ? 'Join Now' : 'I\'m In'}
-                </Text>
+                <Text style={styles.joinButtonText}>I'm In</Text>
               </>
             )}
           </TouchableOpacity>
-        ) : (
-          <View style={styles.completedBadgeContainer}>
-            <Icon name="checkmark-circle" size={18} color={FitRealmColors.textSecondary} />
-            <Text style={styles.completedBadge}>Completed</Text>
-          </View>
         )}
       </View>
     );
@@ -303,7 +597,7 @@ export default function GuildEventsScreen() {
   const tabs: ('active' | 'upcoming' | 'completed')[] = ['active', 'upcoming', 'completed'];
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <View>
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}
@@ -314,6 +608,22 @@ export default function GuildEventsScreen() {
         <Text style={styles.headerTitle}>Guild Events</Text>
         <View style={styles.headerRight} />
       </View>
+      
+      {/* Generate Events Button */}
+      <TouchableOpacity
+        style={[styles.generateButton, generatingEvents && styles.generatingButton]}
+        onPress={generateGuildEvents}
+        disabled={generatingEvents}
+      >
+        {generatingEvents ? (
+          <ActivityIndicator color="#fff" size="small" />
+        ) : (
+          <>
+            <Icon name="add-circle" size={20} color="#fff" style={styles.generateButtonIcon} />
+            <Text style={styles.generateButtonText}>Generate New Events</Text>
+          </>
+        )}
+      </TouchableOpacity>
 
       <View style={styles.tabRow}>
         {tabs.map(tab => (
@@ -355,7 +665,7 @@ export default function GuildEventsScreen() {
           }
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -382,6 +692,33 @@ const styles = StyleSheet.create({
   },
   headerRight: {
     width: 24, // Balance the header
+  },
+  generateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: FitRealmColors.success,
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  generatingButton: {
+    backgroundColor: FitRealmColors.textSecondary,
+  },
+  generateButtonIcon: {
+    marginRight: 8,
+  },
+  generateButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: FitRealmColors.white,
   },
   tabRow: { 
     flexDirection: 'row',
@@ -517,8 +854,24 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     color: FitRealmColors.textSecondary,
   },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  actionButton: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
   joinButton: { 
     backgroundColor: FitRealmColors.primary,
+    padding: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  completeButton: {
+    backgroundColor: FitRealmColors.success,
     padding: 12,
     borderRadius: 12,
     alignItems: 'center',
@@ -528,10 +881,21 @@ const styles = StyleSheet.create({
   joiningButton: { 
     backgroundColor: FitRealmColors.textSecondary,
   },
+  completingButton: {
+    backgroundColor: FitRealmColors.textSecondary,
+  },
   joinButtonIcon: {
     marginRight: 8,
   },
+  buttonIcon: {
+    marginRight: 8,
+  },
   joinButtonText: { 
+    color: FitRealmColors.white,
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  buttonText: {
     color: FitRealmColors.white,
     fontWeight: '600',
     fontSize: 16,

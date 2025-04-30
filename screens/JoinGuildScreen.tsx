@@ -93,7 +93,7 @@ export default function JoinGuildScreen() {
       // Navigate to Guild tab
       navigation.reset({
         index: 0,
-        routes: [{ name: 'Main', params: { screen: 'Guilds' } }],
+        routes: [{ name: 'Main', params: { screen: 'Guild' } }],
       });
     } catch (err) {
       console.error("Unexpected error joining guild:", err);
