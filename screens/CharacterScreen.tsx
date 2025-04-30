@@ -38,6 +38,7 @@ const CHARACTER_CLASSES = [
   { name: 'Mage', icon: 'magic-staff', color: '#6a4c93', statBonus: 'magic' },
   { name: 'Monk', icon: 'meditation', color: '#2a9d8f', statBonus: 'willpower' },
 ];
+import { CharacterScreenNavigationProp } from '../types/navigation';
 
 export default function CharacterScreen() {
   const navigation = useNavigation<CharacterScreenNavigationProp>();
