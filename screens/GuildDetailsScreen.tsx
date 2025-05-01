@@ -255,7 +255,7 @@ export default function GuildDetailsScreen() {
         </View>
         
         {/* Admin Controls - Only visible to leader and officers */}
-        {(userRole === 'leader' || userRole === 'officer') && (
+        {/* {(userRole === 'leader' || userRole === 'officer') && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Admin Controls</Text>
             
@@ -303,7 +303,7 @@ export default function GuildDetailsScreen() {
               </TouchableOpacity>
             )}
           </View>
-        )}
+        )} */}
       </ScrollView>
     </SafeAreaView>
   );
